@@ -1,0 +1,34 @@
+name: Build MiSTer main binary
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test sampler hotplug without hardware
+        run: |
+          g++ -std=gnu++14 -Wall -Wextra -Werror -pthread \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            tests/minimig_sampler_test.cpp -o /tmp/minimig_sampler_test
+          /tmp/minimig_sampler_test
+
+      - name: Install Arm GNU toolchain 10.2
+        run: |
+          curl -sL "https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz" -o gcc.tar.xz
+          tar xf gcc.tar.xz
+          echo "$PWD/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf/bin" >> "$GITHUB_PATH"
+
+      - name: Build
+        run: make
+
+      - name: Upload MiSTer binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiSTer-usb-sampler
+          path: bin/MiSTer
+          if-no-files-found: error

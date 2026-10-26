@@ -1,3 +1,6 @@
+// Host-side core setup and polling for MiSTer. The main loop serializes FPGA
+// access, including USB sampler bursts queued by the separate capture worker.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +39,7 @@
 #include "ide_cdrom.h"
 #include "support/minimig/akiko_cd32.h"
 #include "support/minimig/cdtv_cd.h"
+#include "support/minimig/minimig_sampler.h"
 #ifdef PROFILING
 #include "profiling.h"
 #endif
@@ -652,7 +656,7 @@ void user_io_status_set(const char *opt, uint32_t value, int ex)
 
 	if (!is_st())
 	{
-		uint32_t ext = minimig_core_extcfg();
+		uint32_t ext = minimig_extcfg_for_fpga(minimig_core_extcfg());
 		spi_uio_cmd_cont(UIO_SET_STATUS2);
 		for (uint32_t i = 0; i < sizeof(cur_status); i += 2) spi_w((is_minimig() && (i >> 2) == 1) ? (uint16_t)(ext >> ((i & 2) << 3)) : (cur_status[i + 1] << 8) | cur_status[i]);
 		DisableIO();
@@ -1496,6 +1500,9 @@ void user_io_init(const char *path, const char *xml)
 	// Stop the A2065 threads left over from a previous core. The Minimig boot
 	// path below restarts them if the card is enabled.
 	a2065_stop();
+
+	// Release the USB capture device when a core other than Minimig is loaded.
+	minimig_sampler_stop();
 
 	// Same for the NeXT ethernet bridge.
 	next_enet_stop();
@@ -3426,6 +3433,8 @@ void user_io_poll()
 
 		minimig_share_poll();
 		a2065_poll();
+		// Capture stays in its worker; the FPGA transfer must run on this thread.
+		minimig_sampler_poll();
 	}
 
 	next_enet_poll();

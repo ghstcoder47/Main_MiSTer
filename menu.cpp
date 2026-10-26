@@ -1,3 +1,6 @@
+// MiSTer OSD menus run on the main thread. Minimig's USB Capture entry stores
+// the input selection in extcfg; the sampler worker receives it through polling.
+
 /*
 Copyright 2005, 2006, 2007 Dennis van Weeren
 Copyright 2008, 2009 Jakub Bednarski
@@ -71,6 +74,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "joymap_pad.h"
 
 static void progress_boxes(char *out, int boxes, int value, int max);
+
+#include "support/minimig/minimig_sampler.h"
 
 /*menu states*/
 enum MENU
@@ -1213,6 +1218,9 @@ static void joymap_system_return(int system_sub, int core_sub)
 	menustate = is_menu() ? MENU_SYSTEM1 : MENU_COMMON1;
 	menusub = is_menu() ? system_sub : core_sub;
 }
+
+// Last USB Capture text drawn in the Minimig menu, used to detect changes.
+static char sampler_osd_text[64];
 
 void HandleUI(void)
 {
@@ -7782,7 +7790,7 @@ void HandleUI(void)
 		break;
 
 	case MENU_MINIMIG_VIDEO1:
-		menumask = 0x3fff;
+		menumask = 0xffff;
 		parentstate = menustate;
 		helptext_idx = 0; // helptexts[HELPTEXT_VIDEO];
 
@@ -7792,7 +7800,6 @@ void HandleUI(void)
 		strcpy(s, " TV Standard   : ");
 		strcat(s, minimig_config.chipset & CONFIG_NTSC ? "NTSC" : "PAL");
 		OsdWrite(m++, s, menusub == 0, 0);
-		OsdWrite(m++, "", 0, 0);
 		strcpy(s, " Scandoubler FX: ");
 		strcat(s, config_scanlines_msg[minimig_config.scanlines & 7]);
 		OsdWrite(m++, s, menusub == 1, 0);
@@ -7812,7 +7819,6 @@ void HandleUI(void)
 		strcat(s, (minimig_get_extcfg() & 0x4000) ? "HV-Integer" : "Normal");
 		OsdWrite(m++, s, menusub == 6, 0);
 
-		OsdWrite(m++);
 		strcpy(s, " Stereo mix    : ");
 		strcat(s, config_stereo_msg[minimig_config.audio & 3]);
 		OsdWrite(m++, s, menusub == 7, 0);
@@ -7829,15 +7835,33 @@ void HandleUI(void)
 		strcat(s, minimig_dsnd_loaded() ? config_dsnd_msg[(minimig_get_extcfg() >> 19) & 3] : "No file");
 		OsdWrite(m++, s, menusub == 11, 0);
 
-		OsdWrite(m++, minimig_get_adjust() ? " Finish screen adjustment" : " Adjust screen position", menusub == 12, 0);
+		strcpy(s, " USB Capture   : ");
+		minimig_sampler_describe(sampler_osd_text, sizeof(sampler_osd_text));
+		strcat(s, sampler_osd_text);
+		OsdWrite(m++, s, menusub == 12, 0);
+		strcpy(s, " Capture Dither: ");
+		strcat(s, minimig_sampler_dither_name(minimig_sampler_dither_mode()));
+		OsdWrite(m++, s, menusub == 13, 0);
+		OsdWrite(m++, minimig_get_adjust() ? " Finish screen adjustment" : " Adjust screen position", menusub == 14, 0);
 		for (; m < OsdGetSize() - 1; m++) OsdWrite(m);
-		OsdWrite(OsdGetSize() - 1, STD_BACK, menusub == 13, 0);
+		OsdWrite(OsdGetSize() - 1, STD_BACK, menusub == 15, 0);
 
 		menustate = MENU_MINIMIG_VIDEO2;
 		break;
 
 	case MENU_MINIMIG_VIDEO2:
 		saved_menustate = MENU_MINIMIG_VIDEO1;
+		{
+			// Redraw when the capture device or the selected input changes.
+			char now[sizeof(sampler_osd_text)];
+			minimig_sampler_describe(now, sizeof(now));
+			// Skip the redraw while a key is pending so the key is not lost.
+			if (strcmp(now, sampler_osd_text) && !(select || minus || plus || menu || back || left || right || up || down))
+			{
+				menustate = MENU_MINIMIG_VIDEO1;
+				break;
+			}
+		}
 		if (select || minus || plus)
 		{
 			menustate = MENU_MINIMIG_VIDEO1;
@@ -7926,6 +7950,24 @@ void HandleUI(void)
 				break;
 
 			case 12:
+				{
+					// Cycle only explicit choices. Preserve unrelated extcfg bits;
+					// the unset/file-fallback state is not an extra menu item.
+					int code = (minimig_get_extcfg() >> SAMPLER_CFG_SHIFT) & SAMPLER_CFG_MASK;
+					if (code < 1 || code > 17) code = 1;
+					code += minus ? -1 : 1;
+					if (code < 1) code = 17;
+					if (code > 17) code = 1;
+					minimig_set_extcfg((minimig_get_extcfg() & ~(SAMPLER_CFG_MASK << SAMPLER_CFG_SHIFT)) | ((unsigned int)code << SAMPLER_CFG_SHIFT));
+				}
+				break;
+
+			case 13:
+				minimig_sampler_set_dither((minimig_sampler_dither_mode() + (minus ? 3 : 1)) & 3);
+				minimig_set_extcfg(minimig_get_extcfg());
+				break;
+
+			case 14:
 				if (select)
 				{
 					menustate = MENU_NONE1;
@@ -7933,7 +7975,7 @@ void HandleUI(void)
 				}
 				break;
 
-			case 13:
+			case 15:
 				if (select)
 				{
 					menustate = MENU_MINIMIG_MAIN1;
