@@ -9,6 +9,7 @@
 #include "minimig.h"
 #include "akiko_cd32.h"
 #include "cdtv_cd.h"
+#include "minimig_sampler.h"
 #include "../../user_io.h"
 #include "../../hardware.h"
 #include "../../input.h"
@@ -159,6 +160,8 @@ static void minimig_poll()
 
 	minimig_share_poll();
 	a2065_poll();
+	// Capture stays in its worker; the FPGA transfer must run on this thread.
+	minimig_sampler_poll();
 }
 
 char is_minimig()
