@@ -1,4 +1,6 @@
-// config.c
+// Load, save and apply Minimig's host-side configuration and ROM state.
+// extcfg also persists USB sampler input selection; Linux interprets those
+// bits while the FPGA receives the same extended status word.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +24,7 @@
 #include "minimig_a2065.h"
 #include "akiko_cd32.h"
 #include "cdtv_cd.h"
+#include "minimig_sampler.h"
 #include <unistd.h>
 
 const char *config_memory_chip_msg[] = { "512K", "1M",   "1.5M", "2M" };
@@ -929,15 +932,25 @@ void minimig_ConfigAutofire(unsigned char autofire, unsigned char mask)
 	spi_uio_cmd16(UIO_MM2_JOY, param);
 }
 
+unsigned int minimig_extcfg_for_fpga(unsigned int ext_cfg);
+
 void minimig_set_extcfg(unsigned int ext_cfg)
 {
+	// Preserve the on-disk structure: ext_cfg/ext_cfg2 hold the low/high halves.
+	// Sampler bits 27-31 are host settings; they map to unused FPGA status[63:59].
 	minimig_config.ext_cfg = (unsigned short)ext_cfg;
 	minimig_config.ext_cfg2 = (unsigned short)(ext_cfg >> 16);
 
 	spi_uio_cmd_cont(UIO_SET_STATUS2);
 	spi32_w(0);
-	spi32_w(minimig_core_extcfg());
+	// Output format and dither come from flag files, so they are not stored in extcfg.
+	spi32_w(minimig_extcfg_for_fpga(minimig_core_extcfg()));
 	DisableIO();
+}
+
+unsigned int minimig_extcfg_for_fpga(unsigned int ext_cfg)
+{
+	return (ext_cfg & ~SAMPLER_HW_MASK) | minimig_sampler_hw_bits();
 }
 
 unsigned int minimig_get_extcfg()

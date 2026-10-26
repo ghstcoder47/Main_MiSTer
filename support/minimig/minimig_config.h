@@ -1,3 +1,5 @@
+// Persistent Minimig configuration and the main-thread interface for applying
+// it to the core. USB sampler selection shares extcfg without extending the file.
 
 #ifndef __MINIMIG_CONFIG_H__
 #define __MINIMIG_CONFIG_H__
@@ -64,6 +66,7 @@ typedef struct
 {
 	char            id[8];
 	unsigned short  version;
+	// High half of extcfg; sampler bits 27-31 occupy bits 11-15 of this field.
 	unsigned short  ext_cfg2;
 	char            kickstart[992];
 	char            label[32];
@@ -120,6 +123,8 @@ unsigned int minimig_get_extcfg();
 unsigned int minimig_core_extcfg();
 void minimig_dsnd_load();
 int minimig_dsnd_loaded();
+// Value sent to the FPGA: extcfg with the signed/dither flag-file bits applied.
+unsigned int minimig_extcfg_for_fpga(unsigned int ext_cfg);
 
 // slot: 0 = cd32_drive, 1 = cdtv_drive
 int minimig_cd_drive_open(int slot, const char *filename);
