@@ -963,8 +963,8 @@ void minimig_sampler_poll(void)
 	{
 		static uint16_t last_dbg;
 		uint16_t d = dbg_status & 0x1FFF;
-		if ((dbg_status & SMP_STATUS_DEEP) && d != last_dbg)
-			slog("Sampler: rec hold=%u overrun=%u read_empty=%u (ring %u)", d >> 8, (d >> 4) & 15, d & 15, avail);
+		if (d != last_dbg)
+			slog("Sampler: rec deep=%u hold=%u overrun=%u read_empty=%u (ring %u)", (dbg_status >> 14) & 1, d >> 8, (d >> 4) & 15, d & 15, avail);
 		last_dbg = d;
 	}
 	if (!(dbg_status & SMP_STATUS_REQ)) return;
