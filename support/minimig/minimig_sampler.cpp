@@ -966,6 +966,12 @@ void minimig_sampler_poll(void)
 		if (d != last_dbg)
 			slog("Sampler: rec deep=%u hold=%u overrun=%u read_empty=%u (ring %u)", (dbg_status >> 14) & 1, d >> 8, (d >> 4) & 15, d & 15, avail);
 		last_dbg = d;
+		static uint32_t deep_polls, seen_or;
+		if (dbg_status & SMP_STATUS_DEEP) deep_polls++;
+		uint32_t prev_or = seen_or;
+		seen_or |= dbg_status & 0x1FFF;
+		FILE *g = (seen_or != prev_or || (deep_polls & 255) == 1) ? fopen("/tmp/sampler_rec.txt", "w") : NULL;
+		if (g) { fprintf(g, "deep_polls=%u seen_or=0x%04x\n", deep_polls, seen_or); fclose(g); }
 	}
 	if (!(dbg_status & SMP_STATUS_REQ)) return;
 	dbg_req++;
