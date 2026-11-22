@@ -93,7 +93,7 @@ static void capture_close(int fd)
 #define SMP_RATE        48000
 #define SMP_BURST       512      // frames per transfer; must fit the FPGA's advertised headroom
 #define SMP_MAX_INPUT   16
-#define SMP_RING        8192     // frames, power of two
+#define SMP_RING        65536    // frames (~1.5 s), power of two
 
 // The worker owns head; the main loop owns tail, including during a flush.
 // Counters wrap as unsigned integers. Their distance never exceeds SMP_RING.
