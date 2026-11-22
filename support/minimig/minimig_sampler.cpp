@@ -855,9 +855,12 @@ void minimig_sampler_describe(char *out, size_t len)
 static uint16_t smp_status(void)
 {
 	EnableIO();
-	spi_w(UIO_DMA_SDIO);
-	spi_w(0); // first word: IDE/Akiko flags; the sampler flags follow in the second
+	uint16_t w0 = spi_w(UIO_DMA_SDIO);
+	uint16_t w1 = spi_w(0);
+	uint16_t w2 = spi_w(0);
 	uint16_t status = spi_w(0);
+	static int nlog;
+	if (nlog < 6) { nlog++; slog("Sampler: status words cmd=0x%04x r1=0x%04x r2=0x%04x r3=0x%04x", w0, w1, w2, status); }
 	DisableIO();
 	return status;
 }
