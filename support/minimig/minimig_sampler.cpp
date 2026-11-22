@@ -856,6 +856,7 @@ static uint16_t smp_status(void)
 {
 	EnableIO();
 	spi_w(UIO_DMA_SDIO);
+	spi_w(0); // first word: IDE/Akiko flags; the sampler flags follow in the second
 	uint16_t status = spi_w(0);
 	DisableIO();
 	return status;
