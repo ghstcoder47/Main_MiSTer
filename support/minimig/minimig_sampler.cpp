@@ -966,6 +966,14 @@ void minimig_sampler_poll(void)
 		if (d != last_dbg)
 			slog("Sampler: rec deep=%u hold=%u overrun=%u read_empty=%u (ring %u)", (dbg_status >> 14) & 1, d >> 8, (d >> 4) & 15, d & 15, avail);
 		last_dbg = d;
+		static uint16_t last_raw = 0xFFFF;
+		static uint32_t raw_logs;
+		if ((dbg_status & 0x7FFF) != last_raw && raw_logs < 400)
+		{
+			raw_logs++;
+			slog("Sampler: raw status 0x%04x (ring %u)", dbg_status, avail);
+		}
+		last_raw = dbg_status & 0x7FFF;
 		static uint32_t deep_polls, seen_or;
 		if (dbg_status & SMP_STATUS_DEEP) deep_polls++;
 		uint32_t prev_or = seen_or;
