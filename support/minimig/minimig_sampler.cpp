@@ -89,6 +89,7 @@ static void capture_close(int fd)
 #define SMP_ADDR        0xF600
 // Second UIO_DMA_SDIO word; the first one is fully used by IDE and Akiko.
 #define SMP_STATUS_REQ  0x8000
+#define SMP_STATUS_DEEP 0x4000   // Toccata recording: keep the backlog instead of trimming it
 #define SMP_RATE        48000
 #define SMP_BURST       512      // frames per transfer; must fit the FPGA's advertised headroom
 #define SMP_MAX_INPUT   16
@@ -913,7 +914,8 @@ void minimig_sampler_poll(void)
 
 	// A backlog (for example while the core restarts) never drains by itself
 	// because input and output run at the same rate. Keep about 20 ms.
-	if (avail > SMP_TRIM_ABOVE)
+	static uint16_t last_status;
+	if (avail > (last_status & SMP_STATUS_DEEP ? SMP_RING - SMP_TRIM_KEEP : SMP_TRIM_ABOVE))
 	{
 		tail = head - SMP_TRIM_KEEP;
 		avail = SMP_TRIM_KEEP;
@@ -947,6 +949,7 @@ void minimig_sampler_poll(void)
 	if (avail < 48) return;
 
 	dbg_status = smp_status();
+	last_status = dbg_status;
 	if (!(dbg_status & SMP_STATUS_REQ)) return;
 	dbg_req++;
 
