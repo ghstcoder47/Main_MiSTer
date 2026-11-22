@@ -890,6 +890,14 @@ void minimig_sampler_poll(void)
 
 	uint32_t now = now_ms();
 	if (now == last_ms) return;
+	// Diagnostics: longest gap between two polls (main loop blocked by disk I/O etc.)
+	static uint32_t gap_max, gap_big;
+	if (last_ms && now - last_ms > gap_max) gap_max = now - last_ms;
+	if (last_ms && now - last_ms > 20)
+	{
+		gap_big++;
+		slog("Sampler: main loop gap %u ms (ring %u)\n", now - last_ms, __atomic_load_n(&ring_head, __ATOMIC_ACQUIRE) - __atomic_load_n(&ring_tail, __ATOMIC_RELAXED));
+	}
 	last_ms = now;
 
 	uint32_t tail = __atomic_load_n(&ring_tail, __ATOMIC_RELAXED);
@@ -930,6 +938,8 @@ void minimig_sampler_poll(void)
 		FILE *f = fopen("/tmp/sampler_push.txt", "w");
 		if (f)
 		{
+			fprintf(f, "gap_max=%u gaps_over_20ms=%u ", gap_max, gap_big);
+			gap_max = 0;
 			fprintf(f, "polls=%u avail=%u req_seen=%u frames_pushed=%u last_status=0x%04x\n", dbg_polls, avail, dbg_req, dbg_pushed, dbg_status);
 			fclose(f);
 		}
