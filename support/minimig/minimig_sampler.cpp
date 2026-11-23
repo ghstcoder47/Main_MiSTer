@@ -940,6 +940,14 @@ void minimig_sampler_poll(void)
 		static uint32_t status_next;
 		if ((int32_t)(now - status_next) < 0) return;
 		status_next = now + 100;
+		static uint32_t rate_ms, rate_head;
+		if ((int32_t)(now - rate_ms) >= 10000)
+		{
+			if (rate_ms && ddr_head != rate_head)
+				slog("Sampler: ring write rate %u frames/s\n", (uint32_t)((uint64_t)(ddr_head - rate_head) * 1000 / (now - rate_ms)));
+			rate_ms = now;
+			rate_head = ddr_head;
+		}
 		uint16_t st = smp_status();
 		uint16_t d = st & 0x1FFF;
 		static uint16_t last_dbg = 0xFFFF;
