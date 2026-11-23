@@ -123,7 +123,7 @@ static volatile int test_hz;    // Debug: if the test file holds a number, a sin
 #define SMP_DDR_BASE    0x1FF40000u
 #define SMP_DDR_SIZE    0x42000u
 #define SMP_DDR_FRAMES  65536u
-#define SMP_DDR_MAGIC   0x55534244u
+#define SMP_DDR_MAGIC   0x55534244u  // bit 0 of the header's upper word is the monitor flag, the core ignores it for the check
 static volatile uint32_t cap_xruns, cap_gap_max;  // diagnostics: ALSA overruns, longest pause between reads
 static volatile uint32_t *ddr_ring;
 static uint32_t ddr_head;
@@ -855,6 +855,25 @@ const char *minimig_sampler_dither_name(int mode)
 	return names[mode & 3];
 }
 
+static int monitor_cache = -1;
+
+int minimig_sampler_monitor(void)
+{
+	if (monitor_cache < 0) monitor_cache = access("/media/fat/config/sampler_monitor", F_OK) == 0;
+	return monitor_cache;
+}
+
+void minimig_sampler_set_monitor(int on)
+{
+	monitor_cache = on ? 1 : 0;
+	if (on)
+	{
+		FILE *f = fopen("/media/fat/config/sampler_monitor", "w");
+		if (f) fclose(f);
+	}
+	else unlink("/media/fat/config/sampler_monitor");
+}
+
 unsigned int minimig_sampler_hw_bits(void)
 {
 	return (minimig_sampler_signed_output() ? SAMPLER_SIGNED_BIT : 0) |
@@ -912,6 +931,13 @@ void minimig_sampler_poll(void)
 			slog("Sampler: DDR3 ring active\n");
 		}
 		else slog("Sampler: DDR3 ring not available, using SPI\n");
+	}
+
+	// The core reads the monitor flag from header bit 32.
+	if (ddr_ring)
+	{
+		uint32_t hdr = SMP_DDR_MAGIC | (minimig_sampler_monitor() ? 1u : 0u);
+		if (ddr_ring[1] != hdr) ddr_ring[1] = hdr;
 	}
 
 	// Also resumes capture after minimig_sampler_stop().

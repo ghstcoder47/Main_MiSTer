@@ -7907,8 +7907,9 @@ void HandleUI(void)
 		minimig_sampler_describe(sampler_osd_text, sizeof(sampler_osd_text));
 		strcat(s, sampler_osd_text);
 		OsdWrite(m++, s, menusub == 12, 0);
-		strcpy(s, " Capture Dither: ");
+		strcpy(s, " Dither:");
 		strcat(s, minimig_sampler_dither_name(minimig_sampler_dither_mode()));
+		strcat(s, minimig_sampler_monitor() ? " Mon:On" : " Mon:Off");
 		OsdWrite(m++, s, menusub == 13, 0);
 		OsdWrite(m++, minimig_get_adjust() ? " Finish screen adjustment" : " Adjust screen position", menusub == 14, 0);
 		for (; m < OsdGetSize() - 1; m++) OsdWrite(m);
@@ -8031,8 +8032,13 @@ void HandleUI(void)
 				break;
 
 			case 13:
-				minimig_sampler_set_dither((minimig_sampler_dither_mode() + (minus ? 3 : 1)) & 3);
-				minimig_set_extcfg(minimig_get_extcfg());
+				// Select toggles the monitor, +/- changes the dither mode.
+				if (select) minimig_sampler_set_monitor(!minimig_sampler_monitor());
+				else
+				{
+					minimig_sampler_set_dither((minimig_sampler_dither_mode() + (minus ? 3 : 1)) & 3);
+					minimig_set_extcfg(minimig_get_extcfg());
+				}
 				break;
 
 			case 14:

@@ -35,6 +35,10 @@ int minimig_sampler_dither_mode(void);
 void minimig_sampler_set_dither(int mode);        // persists to sampler_dither
 const char *minimig_sampler_dither_name(int mode); // 15 chars max
 
+// Monitor: plays the USB input on the MiSTer audio output; flag file /media/fat/config/sampler_monitor.
+int minimig_sampler_monitor(void);
+void minimig_sampler_set_monitor(int on);
+
 // Flag bits (signed + dither) that are not stored in the saved config.
 #define SAMPLER_HW_MASK (SAMPLER_SIGNED_BIT | SAMPLER_DITHER_MASK)
 unsigned int minimig_sampler_hw_bits(void);
