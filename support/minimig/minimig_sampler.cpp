@@ -897,11 +897,22 @@ void minimig_sampler_describe(char *out, size_t len)
 	else snprintf(out, len, "Auto");
 }
 
+// Applies changes to sampler_signed / sampler_dither without a restart.
+static void smp_refresh_flags(void)
+{
+	static int last_hw = -1;
+	int hw = (int)minimig_sampler_hw_bits();
+	if (hw != last_hw)
+	{
+		last_hw = hw;
+		minimig_set_extcfg(minimig_get_extcfg());
+	}
+}
+
 static uint16_t smp_status(void)
 {
 	EnableIO();
-	spi_w(UIO_DMA_SDIO);
-	uint16_t status = spi_w(0);
+	uint16_t status = spi_w(0x64);
 	DisableIO();
 	return status;
 }
@@ -972,6 +983,12 @@ void minimig_sampler_poll(void)
 		static uint32_t status_next;
 		if ((int32_t)(now - status_next) < 0) return;
 		status_next = now + 100;
+		static uint32_t flags_next;
+		if ((int32_t)(now - flags_next) >= 0)
+		{
+			flags_next = now + 1000;
+			smp_refresh_flags();
+		}
 		static uint32_t rate_ms, rate_head;
 		if ((int32_t)(now - rate_ms) >= 10000)
 		{
@@ -1035,14 +1052,7 @@ void minimig_sampler_poll(void)
 		}
 		dbg_next = now + 1000;
 
-		// Apply changes to sampler_signed / sampler_dither without a restart.
-		static int last_hw = -1;
-		int hw = (int)minimig_sampler_hw_bits();
-		if (hw != last_hw)
-		{
-			last_hw = hw;
-			minimig_set_extcfg(minimig_get_extcfg());
-		}
+		smp_refresh_flags();
 	}
 
 	// Batch at least 1 ms of audio; bit 14 promises room for the entire burst.
