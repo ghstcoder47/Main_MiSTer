@@ -183,6 +183,9 @@ static uint16_t spi_w(uint16_t) { return fpga_status; }
 #define usleep test_usleep
 #define poll test_poll
 #define ioctl test_ioctl
+// No DDR3 in the test: the sampler falls back to SPI pushes.
+void *shmem_map(uint32_t, uint32_t) { return NULL; }
+
 #include "../support/minimig/minimig_sampler.cpp"
 #undef open
 #undef close
