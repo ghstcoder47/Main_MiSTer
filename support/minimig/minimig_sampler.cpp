@@ -964,7 +964,7 @@ void minimig_sampler_poll(void)
 		static uint16_t last_dbg;
 		uint16_t d = dbg_status & 0x1FFF;
 		if (d != last_dbg)
-			slog("Sampler: rec deep=%u source_gaps=%u fifo_min=%u/16 overrun=%u read_empty=%u (ring %u)", (dbg_status >> 14) & 1, d >> 8, (d >> 4) & 15, (d >> 2) & 3, d & 3, avail);
+			slog("Sampler: rec deep=%u source_gaps=%u fifo_min=%u/16 (x2048 frames) overrun=%u read_empty=%u (ring %u)", (dbg_status >> 14) & 1, d >> 8, (d >> 4) & 15, (d >> 2) & 3, d & 3, avail);
 		last_dbg = d;
 		static uint16_t last_raw = 0xFFFF;
 		static uint32_t raw_logs;
