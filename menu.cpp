@@ -8029,10 +8029,10 @@ void HandleUI(void)
 					// Cycle only explicit choices. Preserve unrelated extcfg bits;
 					// the unset/file-fallback state is not an extra menu item.
 					int code = (minimig_get_extcfg() >> SAMPLER_CFG_SHIFT) & SAMPLER_CFG_MASK;
-					if (code < 1 || code > 17) code = 1;
+					if (code < 1 || code > SAMPLER_CFG_OFF) code = 1;
 					code += minus ? -1 : 1;
-					if (code < 1) code = 17;
-					if (code > 17) code = 1;
+					if (code < 1) code = SAMPLER_CFG_OFF;
+					if (code > SAMPLER_CFG_OFF) code = 1;
 					minimig_set_extcfg((minimig_get_extcfg() & ~(SAMPLER_CFG_MASK << SAMPLER_CFG_SHIFT)) | ((unsigned int)code << SAMPLER_CFG_SHIFT));
 				}
 				break;

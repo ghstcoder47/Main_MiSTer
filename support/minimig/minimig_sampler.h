@@ -16,11 +16,12 @@ void minimig_sampler_poll(void);
 void minimig_sampler_stop(void);
 
 // extcfg bits 27-31 are saved in the existing Minimig config layout:
-// 0 = unset, 1 = explicit Auto, 2..17 = inputs 1..16, 18..31 = invalid.
+// 0 = unset, 1 = explicit Auto, 2..17 = inputs 1..16, 18 = Off, 19..31 = invalid.
 // Unset/invalid falls back to sampler_channel.txt, then Auto. Explicit Auto
 // overrides the file. These bits map to FPGA status[63:59], unused by the core.
 #define SAMPLER_CFG_SHIFT 27
 #define SAMPLER_CFG_MASK  0x1f
+#define SAMPLER_CFG_OFF   18
 
 // 1 = FPGA outputs signed 8 bit (silence 0x00), 0 = offset binary (silence 0x80).
 // Sent to the core as extcfg bit 24 (status[56]) whenever extcfg is applied.

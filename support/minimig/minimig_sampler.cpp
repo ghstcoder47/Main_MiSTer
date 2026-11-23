@@ -890,7 +890,8 @@ void minimig_sampler_describe(char *out, size_t len)
 	int channels = (st >> 1) & 63;
 	int used = (st >> 7) & 31;
 
-	if (!device) snprintf(out, len, "No device");
+	if (code == SAMPLER_CFG_OFF) snprintf(out, len, "Off");
+	else if (!device) snprintf(out, len, "No device");
 	else if (sel && sel > channels) snprintf(out, len, "Input %d n/a", sel);
 	else if (sel) snprintf(out, len, src == SRC_FILE ? "Input %d (file)" : "Input %d", sel);
 	else if (used > 0) snprintf(out, len, "Auto (%d)", used);
@@ -928,7 +929,9 @@ void minimig_sampler_poll(void)
 {
 	static uint32_t last_ms;
 
-	__atomic_store_n(&osd_input, (int)((minimig_get_extcfg() >> SAMPLER_CFG_SHIFT) & SAMPLER_CFG_MASK), __ATOMIC_RELEASE);
+	int osd_code = (int)((minimig_get_extcfg() >> SAMPLER_CFG_SHIFT) & SAMPLER_CFG_MASK);
+	bool off = osd_code == SAMPLER_CFG_OFF;
+	__atomic_store_n(&osd_input, osd_code, __ATOMIC_RELEASE);
 
 	if (!ddr_ring)
 	{
@@ -947,12 +950,14 @@ void minimig_sampler_poll(void)
 	// The core reads the monitor flag from header bit 32.
 	if (ddr_ring)
 	{
-		uint32_t hdr = SMP_DDR_MAGIC | (minimig_sampler_monitor() ? 1u : 0u);
+		// Without the magic the core stops fetching and releases the parallel port.
+		uint32_t hdr = off ? 0 : SMP_DDR_MAGIC | (minimig_sampler_monitor() ? 1u : 0u);
 		if (ddr_ring[1] != hdr) ddr_ring[1] = hdr;
 	}
 
 	// Also resumes capture after minimig_sampler_stop().
-	sampler_wanted = 1;
+	sampler_wanted = off ? 0 : 1;
+	if (off) return;
 	if (!thread_started)
 	{
 		if (pthread_create(&sampler_thread, NULL, sampler_main, NULL))
