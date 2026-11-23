@@ -124,6 +124,7 @@ static volatile int test_hz;    // Debug: if the test file holds a number, a sin
 #define SMP_DDR_SIZE    0x42000u
 #define SMP_DDR_FRAMES  65536u
 #define SMP_DDR_MAGIC   0x55534244u
+static volatile uint32_t cap_xruns, cap_gap_max;  // diagnostics: ALSA overruns, longest pause between reads
 static volatile uint32_t *ddr_ring;
 static uint32_t ddr_head;
 
@@ -664,6 +665,7 @@ static int capture_run(struct capture *c)
 			if (error == EAGAIN) { usleep(1000); continue; }
 			if (error == EPIPE || error == ESTRPIPE)
 			{
+				cap_xruns++;
 				if (++recoveries > 20) { why = "too many xruns"; last_error = error; break; }
 				if (error == ESTRPIPE)
 				{
@@ -687,6 +689,10 @@ static int capture_run(struct capture *c)
 		}
 		if (!x.result) { usleep(1000); continue; }
 		if (x.result > (long)c->period) { why = "invalid frame count"; last_error = EIO; break; }
+		{
+			uint32_t t = now_ms();
+			if (t - last_data > cap_gap_max && last_data) cap_gap_max = t - last_data;
+		}
 		last_data = now_ms();
 		recoveries = 0;
 
@@ -944,7 +950,8 @@ void minimig_sampler_poll(void)
 		if ((int32_t)(now - rate_ms) >= 10000)
 		{
 			if (rate_ms && ddr_head != rate_head)
-				slog("Sampler: ring write rate %u frames/s\n", (uint32_t)((uint64_t)(ddr_head - rate_head) * 1000 / (now - rate_ms)));
+				slog("Sampler: ring write rate %u frames/s, xruns=%u, longest read pause %u ms\n", (uint32_t)((uint64_t)(ddr_head - rate_head) * 1000 / (now - rate_ms)), cap_xruns, cap_gap_max);
+			cap_gap_max = 0;
 			rate_ms = now;
 			rate_head = ddr_head;
 		}
