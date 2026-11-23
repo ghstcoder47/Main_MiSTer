@@ -23,6 +23,7 @@
 #include <sound/asound.h>
 
 #include "../../spi.h"
+#include "../../shmem.h"
 #include "../../user_io.h"
 #include "minimig_config.h"
 #include "minimig_sampler.h"
@@ -116,8 +117,27 @@ static uint32_t ring_dropped;
 static volatile int test_tone;  // Debug: triangle wave, 200 Hz at a 48 kHz capture rate
 static volatile int test_hz;    // Debug: if the test file holds a number, a sine of that many Hz
 
+// DDR3 ring read by the core itself (usb_ddr_reader.v); the FPGA no longer depends on
+// this process's SPI polling. Layout: header word at +0 ({magic, frames written}),
+// two 16-bit frames per 64 bit word from +0x1000.
+#define SMP_DDR_BASE    0x1FF40000u
+#define SMP_DDR_SIZE    0x42000u
+#define SMP_DDR_FRAMES  65536u
+#define SMP_DDR_MAGIC   0x55534244u
+static volatile uint32_t *ddr_ring;
+static uint32_t ddr_head;
+
+static void ddr_put(int16_t l, int16_t r)
+{
+	ddr_ring[0x1000 / 4 + (ddr_head & (SMP_DDR_FRAMES - 1))] = ((uint32_t)(uint16_t)l << 16) | (uint16_t)r;
+	ddr_head++;
+	__sync_synchronize();
+	ddr_ring[0] = ddr_head;
+}
+
 static void ring_put(int16_t l, int16_t r)
 {
+	if (ddr_ring) { ddr_put(l, r); return; }
 	uint32_t head = __atomic_load_n(&ring_head, __ATOMIC_RELAXED);
 	uint32_t tail = __atomic_load_n(&ring_tail, __ATOMIC_ACQUIRE);
 	uint32_t fill = head - tail;
@@ -874,6 +894,20 @@ void minimig_sampler_poll(void)
 
 	__atomic_store_n(&osd_input, (int)((minimig_get_extcfg() >> SAMPLER_CFG_SHIFT) & SAMPLER_CFG_MASK), __ATOMIC_RELEASE);
 
+	if (!ddr_ring)
+	{
+		volatile uint32_t *m = (volatile uint32_t *)shmem_map(SMP_DDR_BASE, SMP_DDR_SIZE);
+		if (m)
+		{
+			m[0] = 0;
+			m[1] = SMP_DDR_MAGIC;
+			__sync_synchronize();
+			ddr_ring = m;
+			slog("Sampler: DDR3 ring active\n");
+		}
+		else slog("Sampler: DDR3 ring not available, using SPI\n");
+	}
+
 	// Also resumes capture after minimig_sampler_stop().
 	sampler_wanted = 1;
 	if (!thread_started)
@@ -899,6 +933,21 @@ void minimig_sampler_poll(void)
 		slog("Sampler: main loop gap %u ms (ring %u)\n", now - last_ms, __atomic_load_n(&ring_head, __ATOMIC_ACQUIRE) - __atomic_load_n(&ring_tail, __ATOMIC_RELAXED));
 	}
 	last_ms = now;
+
+	if (ddr_ring)
+	{
+		// Diagnostics only: the core fetches the audio itself.
+		static uint32_t status_next;
+		if ((int32_t)(now - status_next) < 0) return;
+		status_next = now + 100;
+		uint16_t st = smp_status();
+		uint16_t d = st & 0x1FFF;
+		static uint16_t last_dbg = 0xFFFF;
+		if (d != last_dbg)
+			slog("Sampler: rec deep=%u source_gaps=%u fifo_min=%u/16 (x2048 frames) overrun=%u read_empty=%u\n", (st >> 14) & 1, d >> 8, (d >> 4) & 15, (d >> 2) & 3, d & 3);
+		last_dbg = d;
+		return;
+	}
 
 	uint32_t tail = __atomic_load_n(&ring_tail, __ATOMIC_RELAXED);
 
