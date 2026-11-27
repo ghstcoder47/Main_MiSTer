@@ -1,3 +1,6 @@
+// MiSTer OSD menus run on the main thread. Minimig's USB Capture entry stores
+// the input selection in extcfg; the sampler worker receives it through polling.
+
 /*
 Copyright 2005, 2006, 2007 Dennis van Weeren
 Copyright 2008, 2009 Jakub Bednarski
@@ -71,6 +74,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "joymap_pad.h"
 
 static void progress_boxes(char *out, int boxes, int value, int max);
+
+#include "support/minimig/minimig_sampler.h"
 
 /*menu states*/
 enum MENU
@@ -1280,6 +1285,9 @@ static void joymap_system_return(int system_sub, int core_sub)
 	menustate = is_menu() ? MENU_SYSTEM1 : MENU_COMMON1;
 	menusub = is_menu() ? system_sub : core_sub;
 }
+
+// Last USB Capture text drawn in the Minimig menu, used to detect changes.
+static char sampler_osd_text[64];
 
 void HandleUI(void)
 {
@@ -8033,62 +8041,85 @@ void HandleUI(void)
 		break;
 
 	case MENU_MINIMIG_VIDEO1:
-		menumask = 0x3fff;
+		menumask = 0x1ffff;
 		parentstate = menustate;
 		helptext_idx = 0; // helptexts[HELPTEXT_VIDEO];
 
-		m = 0;
+		// 16 items do not fit the 15 free rows: the list scrolls by one row.
+		static int vid_off;
+		if (menusub == 0) vid_off = 0;
+		else if (menusub == 15) vid_off = 1;
 		OsdSetTitle("Audio & Video");
+		m = 0;
 
 		strcpy(s, " TV Standard   : ");
 		strcat(s, minimig_config.chipset & CONFIG_NTSC ? "NTSC" : "PAL");
-		OsdWrite(m++, s, menusub == 0, 0);
-		OsdWrite(m++, "", 0, 0);
+		if (0 >= vid_off && 0 < vid_off + 15) OsdWrite(0 - vid_off, s, menusub == 0, 0);
 		strcpy(s, " Scandoubler FX: ");
 		strcat(s, config_scanlines_msg[minimig_config.scanlines & 7]);
-		OsdWrite(m++, s, menusub == 1, 0);
+		if (1 >= vid_off && 1 < vid_off + 15) OsdWrite(1 - vid_off, s, menusub == 1, 0);
 		strcpy(s, " Video area by : ");
 		strcat(s, config_blank_msg[(minimig_config.scanlines >> 6) & 3]);
-		OsdWrite(m++, s, menusub == 2, 0);
+		if (2 >= vid_off && 2 < vid_off + 15) OsdWrite(2 - vid_off, s, menusub == 2, 0);
 		strcpy(s, " Aspect Ratio  : ");
 		minimig_config.scanlines = (get_ar_name((minimig_config.scanlines >> 4) & 3, s) << 4) | (minimig_config.scanlines & ~0x30);
-		OsdWrite(m++, s, menusub == 3, 0);
+		if (3 >= vid_off && 3 < vid_off + 15) OsdWrite(3 - vid_off, s, menusub == 3, 0);
 		strcpy(s, " Pixel Clock   : ");
 		strcat(s, (minimig_get_extcfg() & 0x400) ? "Adaptive" : "28MHz");
-		OsdWrite(m++, s, menusub == 4, 0);
+		if (4 >= vid_off && 4 < vid_off + 15) OsdWrite(4 - vid_off, s, menusub == 4, 0);
 		strcpy(s, " Scaling       : ");
 		strcat(s,config_scale[(minimig_get_extcfg() >> 11) & 7]);
-		OsdWrite(m++, s, menusub == 5, 0);
+		if (5 >= vid_off && 5 < vid_off + 15) OsdWrite(5 - vid_off, s, menusub == 5, 0);
 		strcpy(s, " RTG Upscaling : ");
 		strcat(s, (minimig_get_extcfg() & 0x4000) ? "HV-Integer" : "Normal");
-		OsdWrite(m++, s, menusub == 6, 0);
+		if (6 >= vid_off && 6 < vid_off + 15) OsdWrite(6 - vid_off, s, menusub == 6, 0);
 
-		OsdWrite(m++);
 		strcpy(s, " Stereo mix    : ");
 		strcat(s, config_stereo_msg[minimig_config.audio & 3]);
-		OsdWrite(m++, s, menusub == 7, 0);
+		if (7 >= vid_off && 7 < vid_off + 15) OsdWrite(7 - vid_off, s, menusub == 7, 0);
 		strcpy(s, " Audio Filter  : ");
 		strcat(s, (~minimig_get_extcfg() & 0x10000) ? "Auto(LED)" : (minimig_get_extcfg() & 0x8000) ? "On" : "Off");
-		OsdWrite(m++, s, menusub == 8, 0);
+		if (8 >= vid_off && 8 < vid_off + 15) OsdWrite(8 - vid_off, s, menusub == 8, 0);
 		strcpy(s, " Model         : ");
 		strcat(s, (minimig_get_extcfg() & 0x20000) ? "A1200" : "A500");
-		OsdWrite(m++, s, menusub == 9, 0);
+		if (9 >= vid_off && 9 < vid_off + 15) OsdWrite(9 - vid_off, s, menusub == 9, 0);
 		strcpy(s, " Paula Output  : ");
 		strcat(s, (minimig_get_extcfg() & 0x40000) ? "PWM" : "Normal");
-		OsdWrite(m++, s, menusub == 10, 0);
+		if (10 >= vid_off && 10 < vid_off + 15) OsdWrite(10 - vid_off, s, menusub == 10, 0);
 		strcpy(s, " Drive Sounds  : ");
 		strcat(s, minimig_dsnd_loaded() ? config_dsnd_msg[(minimig_get_extcfg() >> 19) & 3] : "No file");
-		OsdWrite(m++, s, menusub == 11, 0);
+		if (11 >= vid_off && 11 < vid_off + 15) OsdWrite(11 - vid_off, s, menusub == 11, 0);
 
-		OsdWrite(m++, minimig_get_adjust() ? " Finish screen adjustment" : " Adjust screen position", menusub == 12, 0);
-		for (; m < OsdGetSize() - 1; m++) OsdWrite(m);
-		OsdWrite(OsdGetSize() - 1, STD_BACK, menusub == 13, 0);
+		strcpy(s, " USB Capture   : ");
+		minimig_sampler_describe(sampler_osd_text, sizeof(sampler_osd_text));
+		strcat(s, sampler_osd_text);
+		if (12 >= vid_off && 12 < vid_off + 15) OsdWrite(12 - vid_off, s, menusub == 12, 0);
+		strcpy(s, " Capture Dither: ");
+		strcat(s, minimig_sampler_dither_name(minimig_sampler_dither_mode()));
+		if (13 >= vid_off && 13 < vid_off + 15) OsdWrite(13 - vid_off, s, menusub == 13, 0);
+		strcpy(s, " Capture Monitor: ");
+		strcat(s, minimig_sampler_monitor() ? "On" : "Off");
+		if (14 >= vid_off && 14 < vid_off + 15) OsdWrite(14 - vid_off, s, menusub == 14, 0);
+		strcpy(s, minimig_get_adjust() ? " Finish screen adjustment" : " Adjust screen position");
+		if (15 >= vid_off && 15 < vid_off + 15) OsdWrite(15 - vid_off, s, menusub == 15, 0);
+		OsdWrite(OsdGetSize() - 1, STD_BACK, menusub == 16, 0);
 
 		menustate = MENU_MINIMIG_VIDEO2;
 		break;
 
 	case MENU_MINIMIG_VIDEO2:
 		saved_menustate = MENU_MINIMIG_VIDEO1;
+		{
+			// Redraw when the capture device or the selected input changes.
+			char now[sizeof(sampler_osd_text)];
+			minimig_sampler_describe(now, sizeof(now));
+			// Skip the redraw while a key is pending so the key is not lost.
+			if (strcmp(now, sampler_osd_text) && !(select || minus || plus || menu || back || left || right || up || down))
+			{
+				menustate = MENU_MINIMIG_VIDEO1;
+				break;
+			}
+		}
 		if (select || minus || plus)
 		{
 			menustate = MENU_MINIMIG_VIDEO1;
@@ -8177,6 +8208,28 @@ void HandleUI(void)
 				break;
 
 			case 12:
+				{
+					// Cycle only explicit choices. Preserve unrelated extcfg bits;
+					// the unset/file-fallback state is not an extra menu item.
+					int code = (minimig_get_extcfg() >> SAMPLER_CFG_SHIFT) & SAMPLER_CFG_MASK;
+					if (code < 1 || code > SAMPLER_CFG_OFF) code = 1;
+					code += minus ? -1 : 1;
+					if (code < 1) code = SAMPLER_CFG_OFF;
+					if (code > SAMPLER_CFG_OFF) code = 1;
+					minimig_set_extcfg((minimig_get_extcfg() & ~(SAMPLER_CFG_MASK << SAMPLER_CFG_SHIFT)) | ((unsigned int)code << SAMPLER_CFG_SHIFT));
+				}
+				break;
+
+			case 13:
+				minimig_sampler_set_dither((minimig_sampler_dither_mode() + (minus ? 3 : 1)) & 3);
+				minimig_set_extcfg(minimig_get_extcfg());
+				break;
+
+			case 14:
+				minimig_sampler_set_monitor(!minimig_sampler_monitor());
+				break;
+
+			case 15:
 				if (select)
 				{
 					menustate = MENU_NONE1;
@@ -8184,7 +8237,7 @@ void HandleUI(void)
 				}
 				break;
 
-			case 13:
+			case 16:
 				if (select)
 				{
 					menustate = MENU_MINIMIG_MAIN1;
